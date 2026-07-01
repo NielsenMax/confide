@@ -44,6 +44,11 @@ func (m *memStore) Download(id string) ([]byte, error) {
 	return m.ReadFile(id)
 }
 
+func (m *memStore) HardDeleteByID(id string) (bool, error) {
+	delete(m.files, strings.Trim(id, "/"))
+	return true, nil
+}
+
 func (m *memStore) List(dir string) ([]drive.Entry, error) {
 	dir = strings.Trim(dir, "/")
 	seen := map[string]bool{}
@@ -222,6 +227,33 @@ func TestSoftDeleteTombstoneHidden(t *testing.T) {
 	val, _, err := av.GetSecret("token")
 	if err != nil || string(val) != "xyz" {
 		t.Fatalf("recreate readback: val=%q err=%v", val, err)
+	}
+}
+
+func TestPurgeTombstones(t *testing.T) {
+	store := newMemStore()
+	alice := mustIdentity(t)
+	av, _ := Create(store, alice, "alice", "team")
+	if err := av.SetSecret("live", "", []byte("v")); err != nil {
+		t.Fatal(err)
+	}
+	if err := av.SetSecret("dead", "", []byte("v")); err != nil {
+		t.Fatal(err)
+	}
+	store.files["team/secrets/dead.age"] = []byte{} // tombstone
+
+	purged, skipped, err := av.PurgeTombstones()
+	if err != nil {
+		t.Fatalf("purge: %v", err)
+	}
+	if purged != 1 || skipped != 0 {
+		t.Fatalf("expected purged=1 skipped=0, got purged=%d skipped=%d", purged, skipped)
+	}
+	if _, ok := store.files["team/secrets/dead.age"]; ok {
+		t.Fatal("tombstone file should be gone after purge")
+	}
+	if _, ok := store.files["team/secrets/live.age"]; !ok {
+		t.Fatal("live secret must survive purge")
 	}
 }
 

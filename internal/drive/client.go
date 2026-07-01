@@ -299,6 +299,26 @@ func (c *Client) Remove(path string) error {
 	return nil
 }
 
+// HardDeleteByID permanently deletes a file by ID. A 403 (not the owner) is
+// reported as deleted=false with no error so callers can skip it; 404 counts as
+// already deleted.
+func (c *Client) HardDeleteByID(id string) (bool, error) {
+	err := c.svc.Files.Delete(id).SupportsAllDrives(true).Do()
+	if err == nil {
+		return true, nil
+	}
+	var gerr *googleapi.Error
+	if errors.As(err, &gerr) {
+		if gerr.Code == 404 {
+			return true, nil
+		}
+		if gerr.Code == 403 {
+			return false, nil
+		}
+	}
+	return false, fmt.Errorf("delete %s: %w", id, err)
+}
+
 // emptyFile truncates a file's content to zero bytes, marking it a tombstone.
 func (c *Client) emptyFile(id string) error {
 	_, err := c.svc.Files.Update(id, &driveapi.File{}).

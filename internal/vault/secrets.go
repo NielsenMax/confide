@@ -228,5 +228,30 @@ func (v *Vault) RemoveSecret(name string) error {
 	return v.dc.Remove(v.secretPath(name))
 }
 
+// PurgeTombstones permanently deletes soft-deleted (size-0) secret files. It
+// can only remove files the caller owns; files owned by other members are left
+// for their owner to purge and counted in skipped.
+func (v *Vault) PurgeTombstones() (purged, skipped int, err error) {
+	entries, err := v.dc.List(v.secretsDir())
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, e := range entries {
+		if e.IsDir || !strings.HasSuffix(e.Name, ".age") || e.Size > 0 {
+			continue
+		}
+		ok, err := v.dc.HardDeleteByID(e.ID)
+		if err != nil {
+			return purged, skipped, err
+		}
+		if ok {
+			purged++
+		} else {
+			skipped++
+		}
+	}
+	return purged, skipped, nil
+}
+
 // Meta exposes the (verified) manifest.
 func (v *Vault) Meta() Meta { return *v.meta }

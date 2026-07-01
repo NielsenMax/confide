@@ -136,6 +136,9 @@ to empty (which an Editor is allowed to do). Soft-deleted secrets are hidden fro
 `ls`, read as "not found", and their name can be reused. A **Shared Drive**
 (Workspace) avoids the ownership split entirely and allows real deletes.
 
+Soft-deletes leave a harmless empty file behind. Each owner can permanently clear
+the ones they own with `secret-share purge`.
+
 ### macOS: "secret-share" Not Opened / "Apple could not verify..."
 
 macOS Gatekeeper blocks binaries downloaded from the internet unless they're

@@ -23,6 +23,10 @@ type Store interface {
 	WriteFile(path string, data []byte) error
 	List(dir string) ([]drive.Entry, error)
 	Remove(path string) error
+	// HardDeleteByID permanently deletes a file by ID. It returns false (and no
+	// error) when the caller lacks permission to delete it — i.e. isn't the
+	// owner — so callers can skip rather than fail.
+	HardDeleteByID(id string) (deleted bool, err error)
 }
 
 // formatVersion is the on-disk layout version stored in meta.
