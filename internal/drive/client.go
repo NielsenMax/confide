@@ -215,6 +215,7 @@ type Entry struct {
 	ID       string
 	IsDir    bool
 	Modified string // RFC3339 modifiedTime, when available
+	Size     int64  // content size in bytes; 0 marks a soft-deleted tombstone
 }
 
 // List returns the entries of the folder at dir. A missing folder yields nil.
@@ -244,6 +245,7 @@ func (c *Client) List(dir string) ([]Entry, error) {
 				ID:       f.Id,
 				IsDir:    f.MimeType == folderMIME,
 				Modified: f.ModifiedTime,
+				Size:     f.Size,
 			})
 		}
 		if res.NextPageToken == "" {
@@ -273,13 +275,40 @@ func (c *Client) Remove(path string) error {
 	}
 	if err := c.svc.Files.Delete(id).SupportsAllDrives(true).Do(); err != nil {
 		var gerr *googleapi.Error
-		if errors.As(err, &gerr) && gerr.Code == 404 {
-			return nil
+		if errors.As(err, &gerr) {
+			if gerr.Code == 404 {
+				return nil
+			}
+			if gerr.Code == 403 {
+				// We have Editor but not ownership of this file (a teammate created
+				// it in a shared My Drive folder), so we can't hard-delete it. Fall
+				// back to a soft delete: truncate the content to an empty tombstone,
+				// which an Editor is permitted to do. Callers treat size-0 files as
+				// deleted.
+				if terr := c.emptyFile(id); terr != nil {
+					return fmt.Errorf("delete %q: not the file owner and tombstone failed: %w", path, terr)
+				}
+				delete(c.folderIDs, strings.Trim(path, "/"))
+				return nil
+			}
 		}
 		return fmt.Errorf("delete %q: %w", path, err)
 	}
 	// Invalidate any cached folder id we just removed.
 	delete(c.folderIDs, strings.Trim(path, "/"))
+	return nil
+}
+
+// emptyFile truncates a file's content to zero bytes, marking it a tombstone.
+func (c *Client) emptyFile(id string) error {
+	_, err := c.svc.Files.Update(id, &driveapi.File{}).
+		Media(bytes.NewReader(nil)).
+		SupportsAllDrives(true).
+		Fields("id").
+		Do()
+	if err != nil {
+		return fmt.Errorf("truncate %s: %w", id, err)
+	}
 	return nil
 }
 

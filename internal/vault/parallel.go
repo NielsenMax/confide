@@ -22,11 +22,12 @@ func files(entries []drive.Entry) []drive.Entry {
 	return out
 }
 
-// ageFiles returns only non-directory entries ending in ".age".
-func ageFiles(entries []drive.Entry) []drive.Entry {
+// liveAgeFiles returns non-directory ".age" entries that are not tombstones.
+// A size-0 file is a soft-deleted secret (see Client.emptyFile).
+func liveAgeFiles(entries []drive.Entry) []drive.Entry {
 	out := entries[:0:0]
 	for _, e := range entries {
-		if !e.IsDir && strings.HasSuffix(e.Name, ".age") {
+		if !e.IsDir && strings.HasSuffix(e.Name, ".age") && e.Size > 0 {
 			out = append(out, e)
 		}
 	}

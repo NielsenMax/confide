@@ -120,6 +120,9 @@ func (v *Vault) getByName(name string) (*loadedSecret, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(data) == 0 {
+		return nil, nil // soft-deleted tombstone
+	}
 	memberPubs, err := v.memberSignPubs()
 	if err != nil {
 		return nil, err
@@ -144,7 +147,7 @@ func (v *Vault) readAllSecrets() ([]loadedSecret, error) {
 	if err != nil {
 		return nil, err
 	}
-	return parallelFetch(v.dc, ageFiles(entries), func(e drive.Entry, data []byte) (loadedSecret, error) {
+	return parallelFetch(v.dc, liveAgeFiles(entries), func(e drive.Entry, data []byte) (loadedSecret, error) {
 		return verifyAndDecrypt(secretName(e.Name), data, v.master, memberPubs)
 	})
 }
@@ -209,7 +212,7 @@ func (v *Vault) ListSecrets() ([]SecretInfo, error) {
 		return nil, err
 	}
 	var infos []SecretInfo
-	for _, e := range ageFiles(entries) {
+	for _, e := range liveAgeFiles(entries) {
 		infos = append(infos, SecretInfo{Name: secretName(e.Name), Modified: e.Modified})
 	}
 	sort.Slice(infos, func(i, j int) bool { return infos[i].Name < infos[j].Name })

@@ -126,6 +126,16 @@ back to **passphrase-encrypted files** under the config dir otherwise.
 
 ## Troubleshooting
 
+### Deleting a teammate's secret ("403 insufficientFilePermissions")
+
+In a shared **My Drive** folder, each file is owned by whoever created it, and
+Google only lets the **owner** permanently delete a file. So you can hard-delete
+secrets you wrote, but not ones a teammate wrote. `rm` handles this transparently:
+if it can't delete a teammate's file, it **soft-deletes** by truncating the file
+to empty (which an Editor is allowed to do). Soft-deleted secrets are hidden from
+`ls`, read as "not found", and their name can be reused. A **Shared Drive**
+(Workspace) avoids the ownership split entirely and allows real deletes.
+
 ### macOS: "secret-share" Not Opened / "Apple could not verify..."
 
 macOS Gatekeeper blocks binaries downloaded from the internet unless they're

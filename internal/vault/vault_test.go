@@ -71,7 +71,7 @@ func (m *memStore) List(dir string) ([]drive.Entry, error) {
 		if dir != "" {
 			id = dir + "/" + name
 		}
-		entries = append(entries, drive.Entry{Name: name, ID: id, IsDir: isDir})
+		entries = append(entries, drive.Entry{Name: name, ID: id, IsDir: isDir, Size: int64(len(m.files[id]))})
 	}
 	return entries, nil
 }
@@ -192,6 +192,36 @@ func TestRemoveMemberRotatesKey(t *testing.T) {
 	val, _, err := av.GetSecret("token")
 	if err != nil || !bytes.Equal(val, []byte("abc")) {
 		t.Fatalf("alice lost access after rotation: val=%q err=%v", val, err)
+	}
+}
+
+func TestSoftDeleteTombstoneHidden(t *testing.T) {
+	store := newMemStore()
+	alice := mustIdentity(t)
+	av, _ := Create(store, alice, "alice", "team")
+	if err := av.SetSecret("token", "", []byte("abc")); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a soft delete: the file content is truncated to empty.
+	store.files["team/secrets/token.age"] = []byte{}
+
+	infos, err := av.ListSecrets()
+	if err != nil {
+		t.Fatalf("ls: %v", err)
+	}
+	if len(infos) != 0 {
+		t.Fatalf("tombstone should be hidden from ls, got %d entries", len(infos))
+	}
+	if _, _, err := av.GetSecret("token"); err == nil {
+		t.Fatal("expected tombstoned secret to read as not found")
+	}
+	// The name is reusable: writing again overwrites the tombstone.
+	if err := av.SetSecret("token", "", []byte("xyz")); err != nil {
+		t.Fatalf("recreate: %v", err)
+	}
+	val, _, err := av.GetSecret("token")
+	if err != nil || string(val) != "xyz" {
+		t.Fatalf("recreate readback: val=%q err=%v", val, err)
 	}
 }
 
