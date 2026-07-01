@@ -1,0 +1,5 @@
+/secret-share
+/ss-bin
+*.test
+credentials.json
+.env
