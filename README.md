@@ -74,6 +74,9 @@ the embedded default.
 # Teammates receive the prebuilt ./confide binary and just run commands.
 # (To build yourself: `make`, or `go build .` if credentials are embedded/overridden.)
 
+# Put it on your PATH so you can run `confide` from anywhere:
+./confide install --add-path         # copies to ~/.local/bin, updates your shell rc
+
 # First run: create your identity, log in via browser, create the store folder.
 ./confide init --name alice          # add --drive-id <id> for a Shared Drive
 
