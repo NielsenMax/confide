@@ -1,4 +1,4 @@
-// Command secret-share is a CLI for sharing secrets with a team, using Google
+// Command confide is a CLI for sharing secrets with a team, using Google
 // Drive as an encrypted storage backend.
 package main
 
@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/maxinielsen/secret-share/cmd"
+	"github.com/maxinielsen/confide/cmd"
 )
 
 func main() {

@@ -1,4 +1,4 @@
-/secret-share
+/confide
 /ss-bin
 *.test
 credentials.json

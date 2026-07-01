@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/maxinielsen/secret-share/internal/drive"
+	"github.com/maxinielsen/confide/internal/drive"
 	"github.com/spf13/cobra"
 )
 

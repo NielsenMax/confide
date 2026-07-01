@@ -8,8 +8,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/maxinielsen/secret-share/internal/config"
-	"github.com/maxinielsen/secret-share/internal/keystore"
+	"github.com/maxinielsen/confide/internal/config"
+	"github.com/maxinielsen/confide/internal/keystore"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 
@@ -111,7 +111,7 @@ func (c *Client) resolveFolder(dir string, create bool) (string, error) {
 		return id, nil
 	}
 	if c.cfg.RootFolderID == "" {
-		return "", fmt.Errorf("store not initialized (run `secret-share init`)")
+		return "", fmt.Errorf("store not initialized (run `confide init`)")
 	}
 	parentID := c.folderIDs[""]
 	cur := ""

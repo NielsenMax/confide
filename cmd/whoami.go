@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/maxinielsen/secret-share/internal/crypto"
+	"github.com/maxinielsen/confide/internal/crypto"
 	"github.com/spf13/cobra"
 )
 

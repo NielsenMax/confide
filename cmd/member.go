@@ -84,7 +84,7 @@ var memberRemoveCmd = &cobra.Command{
 		}
 		fmt.Printf("Removed %q and rotated the vault key (epoch %d).\n", args[0], v.Meta().KeyEpoch)
 		fmt.Println("Note: any secret VALUES this member already read are still known to them.")
-		fmt.Println("Rotate those values with `secret-share set` to fully invalidate them.")
+		fmt.Println("Rotate those values with `confide set` to fully invalidate them.")
 		return nil
 	},
 }

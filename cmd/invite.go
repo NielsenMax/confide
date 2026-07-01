@@ -14,7 +14,7 @@ var inviteCmd = &cobra.Command{
 command for them to run.
 
 This handles Drive ACCESS only. To also give them decryption access, add them to
-a vault with: secret-share member add <name> <their-share-token>.`,
+a vault with: confide member add <name> <their-share-token>.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		e, err := setup(cmd, true)
@@ -22,7 +22,7 @@ a vault with: secret-share member add <name> <their-share-token>.`,
 			return err
 		}
 		if e.cfg.RootFolderID == "" {
-			return fmt.Errorf("store not initialized; run `secret-share init` first")
+			return fmt.Errorf("store not initialized; run `confide init` first")
 		}
 		email := args[0]
 		if err := e.dc.ShareFolder(e.cfg.RootFolderID, email, "writer"); err != nil {
@@ -31,13 +31,13 @@ a vault with: secret-share member add <name> <their-share-token>.`,
 		fmt.Printf("Shared the store folder with %s (Editor).\n\n", email)
 		fmt.Println("Tell them to run:")
 		if e.cfg.DriveID != "" {
-			fmt.Printf("\n  secret-share init --name <them> --drive-id %s\n", e.cfg.DriveID)
+			fmt.Printf("\n  confide init --name <them> --drive-id %s\n", e.cfg.DriveID)
 		} else {
-			fmt.Printf("\n  secret-share init --name <them> --root-folder-id %s\n", e.cfg.RootFolderID)
+			fmt.Printf("\n  confide init --name <them> --root-folder-id %s\n", e.cfg.RootFolderID)
 		}
-		fmt.Println("  secret-share whoami            # sends you a share token")
+		fmt.Println("  confide whoami            # sends you a share token")
 		fmt.Println("\nThen you run:")
-		fmt.Printf("\n  secret-share member add <them> <their-share-token>\n")
+		fmt.Printf("\n  confide member add <them> <their-share-token>\n")
 		return nil
 	},
 }

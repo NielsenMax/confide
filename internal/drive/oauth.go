@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/maxinielsen/secret-share/internal/config"
-	"github.com/maxinielsen/secret-share/internal/keystore"
+	"github.com/maxinielsen/confide/internal/config"
+	"github.com/maxinielsen/confide/internal/keystore"
 	"github.com/pkg/browser"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -27,8 +27,8 @@ const Scope = driveapi.DriveScope
 // into the binary at build time:
 //
 //	go build -ldflags "\
-//	  -X github.com/maxinielsen/secret-share/internal/drive.buildClientID=<id> \
-//	  -X github.com/maxinielsen/secret-share/internal/drive.buildClientSecret=<secret>"
+//	  -X github.com/maxinielsen/confide/internal/drive.buildClientID=<id> \
+//	  -X github.com/maxinielsen/confide/internal/drive.buildClientSecret=<secret>"
 //
 // A Google "Desktop app" client secret is NOT confidential — Google documents
 // that installed apps cannot keep it secret, and PKCE (used in Login) is what
@@ -200,7 +200,7 @@ func (p *persistingTokenSource) Token() (*oauth2.Token, error) {
 func tokenSource(ctx context.Context, ks *keystore.Keystore) (oauth2.TokenSource, error) {
 	tok, err := loadToken(ks)
 	if err != nil {
-		return nil, fmt.Errorf("not logged in (run `secret-share login`): %w", err)
+		return nil, fmt.Errorf("not logged in (run `confide login`): %w", err)
 	}
 	cfg, err := loadOAuthConfig("http://127.0.0.1/callback")
 	if err != nil {

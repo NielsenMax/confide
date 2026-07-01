@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/maxinielsen/secret-share/internal/vault"
+	"github.com/maxinielsen/confide/internal/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -51,7 +51,7 @@ func shellQuote(s string) string {
 
 var envCmd = &cobra.Command{
 	Use:   "env",
-	Short: "Print secrets as shell export lines (use with: eval \"$(secret-share env)\")",
+	Short: "Print secrets as shell export lines (use with: eval \"$(confide env)\")",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		e, err := setup(cmd, true)
 		if err != nil {

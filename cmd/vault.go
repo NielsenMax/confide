@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/maxinielsen/secret-share/internal/vault"
+	"github.com/maxinielsen/confide/internal/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -22,7 +22,7 @@ var vaultCreateCmd = &cobra.Command{
 			return err
 		}
 		if e.cfg.MemberName == "" {
-			return fmt.Errorf("member name not set; run `secret-share init --name <you>`")
+			return fmt.Errorf("member name not set; run `confide init --name <you>`")
 		}
 		v, err := vault.Create(e.dc, e.self, e.cfg.MemberName, args[0])
 		if err != nil {
@@ -80,7 +80,7 @@ var vaultListCmd = &cobra.Command{
 			found = true
 		}
 		if !found {
-			fmt.Println("No vaults yet. Create one with `secret-share vault create <name>`.")
+			fmt.Println("No vaults yet. Create one with `confide vault create <name>`.")
 		}
 		return nil
 	},

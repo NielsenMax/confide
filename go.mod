@@ -1,4 +1,4 @@
-module github.com/maxinielsen/secret-share
+module github.com/maxinielsen/confide
 
 go 1.26
 

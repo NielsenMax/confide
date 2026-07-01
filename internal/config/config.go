@@ -10,7 +10,12 @@ import (
 )
 
 // appDir is the subdirectory used under the user's config dir.
-const appDir = "secret-share"
+const appDir = "confide"
+
+// legacyAppDir is the pre-rename config subdirectory. If it exists and the new
+// one doesn't, it is migrated on first use so existing config (and any
+// file-backed keystore entries alongside it) carry over.
+const legacyAppDir = "secret-share"
 
 // Config is the persisted, non-secret application configuration.
 //
@@ -39,6 +44,13 @@ func Dir() (string, error) {
 		return "", fmt.Errorf("locate user config dir: %w", err)
 	}
 	dir := filepath.Join(base, appDir)
+	// One-time migration from the pre-rename directory.
+	if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
+		legacy := filepath.Join(base, legacyAppDir)
+		if _, lerr := os.Stat(legacy); lerr == nil {
+			_ = os.Rename(legacy, dir)
+		}
+	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("create config dir: %w", err)
 	}

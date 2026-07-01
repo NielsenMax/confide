@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/maxinielsen/secret-share/internal/config"
-	"github.com/maxinielsen/secret-share/internal/crypto"
-	"github.com/maxinielsen/secret-share/internal/drive"
-	"github.com/maxinielsen/secret-share/internal/keystore"
+	"github.com/maxinielsen/confide/internal/config"
+	"github.com/maxinielsen/confide/internal/crypto"
+	"github.com/maxinielsen/confide/internal/drive"
+	"github.com/maxinielsen/confide/internal/keystore"
 	"github.com/spf13/cobra"
 )
 
@@ -59,7 +59,7 @@ your My Drive and share that folder with your team.`,
 			cfg.MemberName = initName
 		}
 		if cfg.MemberName == "" {
-			return fmt.Errorf("please provide your member name: secret-share init --name <you>")
+			return fmt.Errorf("please provide your member name: confide init --name <you>")
 		}
 
 		// 3. Drive login if needed.
@@ -92,7 +92,7 @@ your My Drive and share that folder with your team.`,
 		}
 		fmt.Printf("Ready. Member %q, store folder %q (%s).\n", cfg.MemberName, initFolderName,
 			driveLocation(cfg))
-		fmt.Println("Next: `secret-share vault create <name>` to start a vault.")
+		fmt.Println("Next: `confide vault create <name>` to start a vault.")
 		return nil
 	},
 }

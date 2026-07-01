@@ -15,7 +15,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the build version",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Printf("secret-share %s\n", version)
+		fmt.Printf("confide %s\n", version)
 		return nil
 	},
 }

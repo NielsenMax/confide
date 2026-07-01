@@ -1,4 +1,4 @@
-# secret-share
+# confide
 
 Share secrets with a team, using **Google Drive as an encrypted backend**. The
 server (Drive) only ever sees ciphertext; decryption keys never leave members'
@@ -49,14 +49,14 @@ The CLI uses a Google Cloud OAuth client (installed-app flow). You create it
    CLIENT_ID=xxxx.apps.googleusercontent.com
    CLIENT_SECRET=xxxx
    EOF
-   make            # builds ./secret-share with the credentials embedded
+   make            # builds ./confide with the credentials embedded
    ```
 
 The client ID/secret are compiled into the binary via `-ldflags`. **A Desktop-app
 client secret is not confidential** — Google states installed apps can't keep it
 secret, and PKCE (used on every login) is what actually secures the flow. So the
 only thing you distribute to teammates is the **binary** — no `credentials.json`,
-no env vars. They just run `secret-share login`.
+no env vars. They just run `confide login`.
 
 > Testing-mode caveat: while the consent screen is in "Testing", only listed test
 > users can log in and refresh tokens expire after 7 days (occasional re-login).
@@ -71,50 +71,50 @@ the embedded default.
 ## Usage
 
 ```sh
-# Teammates receive the prebuilt ./secret-share binary and just run commands.
+# Teammates receive the prebuilt ./confide binary and just run commands.
 # (To build yourself: `make`, or `go build .` if credentials are embedded/overridden.)
 
 # First run: create your identity, log in via browser, create the store folder.
-./secret-share init --name alice          # add --drive-id <id> for a Shared Drive
+./confide init --name alice          # add --drive-id <id> for a Shared Drive
 
 # Create a vault (you become its admin + first member).
-./secret-share vault create team
+./confide vault create team
 
 # Add secrets.
-printf 'hunter2' | ./secret-share set db-password --notes prod
-./secret-share set api-key --file ./key.pem
-./secret-share ls
-./secret-share get db-password
+printf 'hunter2' | ./confide set db-password --notes prod
+./confide set api-key --file ./key.pem
+./confide ls
+./confide get db-password
 
 # Admit a teammate: they run `whoami`, send you the share token, you add them.
 #   (on Bob's machine)
-./secret-share init --name bob
-./secret-share whoami                      # prints a share token
+./confide init --name bob
+./confide whoami                      # prints a share token
 #   (on your machine)
-./secret-share member add bob <share-token>
+./confide member add bob <share-token>
 
 # Revoke a member (rotates the master key + re-encrypts every secret).
-./secret-share member rm bob
+./confide member rm bob
 ```
 
 ### More commands
 
 ```sh
 # Inject secrets into a process (like `doppler run` / `chamber exec`):
-./secret-share run -- ./deploy.sh            # secrets become $DB_PASSWORD, $API_KEY, ...
-eval "$(./secret-share env)"                 # export them into your current shell
+./confide run -- ./deploy.sh            # secrets become $DB_PASSWORD, $API_KEY, ...
+eval "$(./confide env)"                 # export them into your current shell
 
 # Copy a secret to the clipboard instead of printing it (avoids scrollback):
-./secret-share get db-password --copy
+./confide get db-password --copy
 
 # Admins: promote a member, list admins, rotate the key proactively:
-./secret-share admin add bob
-./secret-share admin ls
-./secret-share rotate                         # re-key without changing membership
+./confide admin add bob
+./confide admin ls
+./confide rotate                         # re-key without changing membership
 
 # Housekeeping:
-./secret-share purge                          # remove soft-deleted tombstones you own
-./secret-share version
+./confide purge                          # remove soft-deleted tombstones you own
+./confide version
 ```
 
 Secret names are mapped to env var names for `run`/`env` (uppercased,
@@ -162,9 +162,9 @@ to empty (which an Editor is allowed to do). Soft-deleted secrets are hidden fro
 (Workspace) avoids the ownership split entirely and allows real deletes.
 
 Soft-deletes leave a harmless empty file behind. Each owner can permanently clear
-the ones they own with `secret-share purge`.
+the ones they own with `confide purge`.
 
-### macOS: "secret-share" Not Opened / "Apple could not verify..."
+### macOS: "confide" Not Opened / "Apple could not verify..."
 
 macOS Gatekeeper blocks binaries downloaded from the internet unless they're
 code-signed and notarized by an Apple Developer account. This tool isn't, so a
@@ -172,9 +172,9 @@ teammate who *downloads* the binary will hit this. It's a quarantine flag, not a
 problem with the file. Strip it and run:
 
 ```sh
-xattr -d com.apple.quarantine ./secret-share   # if that errors: xattr -c ./secret-share
-chmod +x ./secret-share
-./secret-share --help
+xattr -d com.apple.quarantine ./confide   # if that errors: xattr -c ./confide
+chmod +x ./confide
+./confide --help
 ```
 
 The Finder "right-click → Open" trick is unreliable for command-line binaries on

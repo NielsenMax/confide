@@ -16,7 +16,12 @@ import (
 	"github.com/zalando/go-keyring"
 )
 
-const service = "secret-share"
+const service = "confide"
+
+// legacyService is the keychain service name used before the tool was renamed.
+// Entries there are read through and migrated forward on first access so
+// existing users keep their identity and token without re-logging-in.
+const legacyService = "secret-share"
 
 // Entry names.
 const (
@@ -93,6 +98,11 @@ func (k *Keystore) get(name string, secret bool) ([]byte, error) {
 	if k.useKeychain {
 		s, err := keyring.Get(service, name)
 		if errors.Is(err, keyring.ErrNotFound) {
+			// Fall back to the pre-rename service and migrate forward.
+			if ls, lerr := keyring.Get(legacyService, name); lerr == nil {
+				_ = keyring.Set(service, name, ls)
+				return base64.StdEncoding.DecodeString(ls)
+			}
 			return nil, ErrNotFound
 		}
 		if err != nil {

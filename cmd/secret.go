@@ -51,7 +51,7 @@ func editorValue(initial []byte) ([]byte, error) {
 	if editor == "" {
 		editor = "vi"
 	}
-	f, err := os.CreateTemp("", "secret-share-*.txt")
+	f, err := os.CreateTemp("", "confide-*.txt")
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +176,7 @@ var lsCmd = &cobra.Command{
 			}
 		}
 		if len(infos) == 0 {
-			fmt.Println("No secrets yet. Add one with `secret-share set <name>`.")
+			fmt.Println("No secrets yet. Add one with `confide set <name>`.")
 		}
 		return nil
 	},
