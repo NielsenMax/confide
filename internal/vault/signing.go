@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/maxinielsen/confide/internal/crypto"
+	"github.com/NielsenMax/confide/internal/crypto"
 )
 
 // signedEnvelope wraps an authenticated JSON payload. The signature covers the

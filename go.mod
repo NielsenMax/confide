@@ -1,4 +1,4 @@
-module github.com/maxinielsen/confide
+module github.com/NielsenMax/confide
 
 go 1.26
 

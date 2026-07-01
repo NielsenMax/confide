@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/maxinielsen/confide/cmd"
+	"github.com/NielsenMax/confide/cmd"
 )
 
 func main() {

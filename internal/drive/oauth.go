@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/maxinielsen/confide/internal/config"
-	"github.com/maxinielsen/confide/internal/keystore"
+	"github.com/NielsenMax/confide/internal/config"
+	"github.com/NielsenMax/confide/internal/keystore"
 	"github.com/pkg/browser"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -27,8 +27,8 @@ const Scope = driveapi.DriveScope
 // into the binary at build time:
 //
 //	go build -ldflags "\
-//	  -X github.com/maxinielsen/confide/internal/drive.buildClientID=<id> \
-//	  -X github.com/maxinielsen/confide/internal/drive.buildClientSecret=<secret>"
+//	  -X github.com/NielsenMax/confide/internal/drive.buildClientID=<id> \
+//	  -X github.com/NielsenMax/confide/internal/drive.buildClientSecret=<secret>"
 //
 // A Google "Desktop app" client secret is NOT confidential — Google documents
 // that installed apps cannot keep it secret, and PKCE (used in Login) is what

@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/maxinielsen/confide/internal/drive"
+	"github.com/NielsenMax/confide/internal/drive"
 	"github.com/spf13/cobra"
 )
 

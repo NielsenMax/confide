@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/maxinielsen/confide/internal/config"
-	"github.com/maxinielsen/confide/internal/crypto"
-	"github.com/maxinielsen/confide/internal/drive"
-	"github.com/maxinielsen/confide/internal/keystore"
+	"github.com/NielsenMax/confide/internal/config"
+	"github.com/NielsenMax/confide/internal/crypto"
+	"github.com/NielsenMax/confide/internal/drive"
+	"github.com/NielsenMax/confide/internal/keystore"
 	"github.com/spf13/cobra"
 )
 

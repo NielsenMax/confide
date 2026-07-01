@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/maxinielsen/confide/internal/crypto"
-	"github.com/maxinielsen/confide/internal/drive"
+	"github.com/NielsenMax/confide/internal/crypto"
+	"github.com/NielsenMax/confide/internal/drive"
 )
 
 // loadedSecret bundles a stored secret's container with its decrypted payload.

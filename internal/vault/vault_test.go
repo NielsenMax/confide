@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/maxinielsen/confide/internal/crypto"
-	"github.com/maxinielsen/confide/internal/drive"
+	"github.com/NielsenMax/confide/internal/crypto"
+	"github.com/NielsenMax/confide/internal/drive"
 )
 
 // memStore is an in-memory implementation of Store for tests. It keys files by

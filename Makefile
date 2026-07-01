@@ -11,10 +11,10 @@
 -include .env
 export
 
-PKG := github.com/maxinielsen/confide/internal/drive
+PKG := github.com/NielsenMax/confide/internal/drive
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X $(PKG).buildClientID=$(CLIENT_ID) -X $(PKG).buildClientSecret=$(CLIENT_SECRET) \
-	-X github.com/maxinielsen/confide/cmd.version=$(VERSION)
+	-X github.com/NielsenMax/confide/cmd.version=$(VERSION)
 
 .PHONY: build test vet clean
 

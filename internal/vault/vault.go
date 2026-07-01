@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/maxinielsen/confide/internal/crypto"
-	"github.com/maxinielsen/confide/internal/drive"
+	"github.com/NielsenMax/confide/internal/crypto"
+	"github.com/NielsenMax/confide/internal/drive"
 )
 
 // Store is the minimal path-addressed backend the vault needs. *drive.Client

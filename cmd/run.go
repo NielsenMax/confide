@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/maxinielsen/confide/internal/vault"
+	"github.com/NielsenMax/confide/internal/vault"
 	"github.com/spf13/cobra"
 )
 

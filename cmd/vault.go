@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/maxinielsen/confide/internal/vault"
+	"github.com/NielsenMax/confide/internal/vault"
 	"github.com/spf13/cobra"
 )
 

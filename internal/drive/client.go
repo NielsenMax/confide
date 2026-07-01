@@ -8,8 +8,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/maxinielsen/confide/internal/config"
-	"github.com/maxinielsen/confide/internal/keystore"
+	"github.com/NielsenMax/confide/internal/config"
+	"github.com/NielsenMax/confide/internal/keystore"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 

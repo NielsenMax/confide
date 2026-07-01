@@ -3,7 +3,7 @@ package vault
 import (
 	"strings"
 
-	"github.com/maxinielsen/confide/internal/drive"
+	"github.com/NielsenMax/confide/internal/drive"
 	"golang.org/x/sync/errgroup"
 )
 
