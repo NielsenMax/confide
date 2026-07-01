@@ -68,6 +68,27 @@ Overrides (rarely needed): `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET`
 env vars, or a `credentials.json` in the config dir, both take precedence over
 the embedded default.
 
+### One client for everyone vs. publishing publicly
+
+The embedded client ID/secret is a single, **project-level** OAuth client (not
+tied to a Workspace). One embedded client works for *all* users — each person
+who logs in grants *your* app access to *their own* Drive, exactly like
+`rclone`/`gcloud`/`gh`. The secret isn't confidential (Desktop-app secret).
+
+What limits reach is the consent screen's **publishing status**, not the secret:
+
+- **Testing mode** (default): only whitelisted test users (≤100) can log in, and
+  refresh tokens expire after 7 days. Ideal for a private team.
+- **Production**: anyone can log in — but because Confide uses the **restricted
+  `drive` scope**, Google requires **app verification** (an annual third-party
+  security assessment) before publishing to external users.
+
+So if you want to release Confide publicly, the pragmatic path is
+**bring-your-own client**: have each org create their own OAuth client and
+supply it via the env vars / `credentials.json` above (or their own `make`
+build). That avoids Google's verification process *and* the shared Drive API
+quota that a single client ID would impose across all users.
+
 ## Usage
 
 ```sh
@@ -89,15 +110,7 @@ printf 'hunter2' | ./confide set db-password --notes prod
 ./confide ls
 ./confide get db-password
 
-# Admit a teammate: they run `whoami`, send you the share token, you add them.
-#   (on Bob's machine)
-./confide init --name bob
-./confide whoami                      # prints a share token
-#   (on your machine)
-./confide member add bob <share-token>
-
-# Revoke a member (rotates the master key + re-encrypts every secret).
-./confide member rm bob
+# Add or remove teammates — see "Adding a teammate" below.
 ```
 
 ### More commands
@@ -130,6 +143,63 @@ Drive (`--drive-id`); on a **personal Gmail** account, create the vault in your
 My Drive and share the `SecretShare` folder with your team (they need Editor
 access). Full `drive` scope is used because members must read a folder they did
 not themselves create.
+
+## Adding a teammate
+
+Admitting someone needs two kinds of access, and Confide splits them across two
+commands:
+
+- **Drive access** to the shared folder — granted by `invite` (an admin shares
+  the Drive folder with their Google account).
+- **Decryption access** — granted by `member add` (an admin wraps the vault
+  master key to the newcomer's public key).
+
+The newcomer can read nothing until **both** are done, and only an existing
+admin can do either.
+
+**0. One-time (personal Gmail, testing mode):** add the teammate's Google
+account as a **test user** in your OAuth consent screen (Google Cloud Console →
+APIs & Services → OAuth consent screen → Test users). Otherwise their login
+fails with `access_denied`.
+
+**1. Admin — share the folder and get the join command:**
+
+```sh
+confide invite bob@gmail.com
+# Shares the SecretShare folder (Editor) with bob and prints the exact
+# `confide init ... --root-folder-id <id>` command for him to run.
+```
+
+**2. Teammate — set up and produce a share token:**
+
+```sh
+# macOS only, if the binary was downloaded: xattr -d com.apple.quarantine ./confide
+confide init --name bob --root-folder-id <id-from-invite>   # or --drive-id <id> for a Shared Drive
+confide whoami          # prints a "share token" — send it to the admin (any channel; it's public-key material)
+```
+
+**3. Admin — admit them to the vault:**
+
+```sh
+confide member add bob <share-token>
+```
+
+**4. Teammate — use the vault:**
+
+```sh
+confide vault use team
+confide ls
+confide get db-password
+```
+
+**Removing a teammate** (any admin):
+
+```sh
+confide member rm bob   # rotates the master key and re-encrypts every secret
+```
+
+After this bob can't decrypt anything new. He still *knows* any values he
+already read, so rotate those with `confide set` to fully invalidate them.
 
 ## Local key storage
 
