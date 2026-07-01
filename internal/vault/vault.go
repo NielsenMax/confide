@@ -261,6 +261,56 @@ func (v *Vault) ListMembers() ([]Member, error) {
 	})
 }
 
+// ListAdmins returns the names of members whose signing key is an admin key.
+// Admin keys with no matching member record are reported as "(unknown)".
+func (v *Vault) ListAdmins() ([]string, error) {
+	members, err := v.ListMembers()
+	if err != nil {
+		return nil, err
+	}
+	byPub := make(map[string]string, len(members))
+	for _, m := range members {
+		byPub[m.PublicKey.SignPub] = m.Name
+	}
+	names := make([]string, 0, len(v.meta.AdminPubs))
+	for _, pub := range v.meta.AdminPubs {
+		if n, ok := byPub[pub]; ok {
+			names = append(names, n)
+		} else {
+			names = append(names, "(unknown)")
+		}
+	}
+	return names, nil
+}
+
+// AddAdmin promotes an existing member to admin by adding their signing key to
+// the manifest. Requires admin rights.
+func (v *Vault) AddAdmin(name string) error {
+	if !v.isAdmin() {
+		return fmt.Errorf("only an admin can add admins")
+	}
+	name = sanitize(name)
+	members, err := v.ListMembers()
+	if err != nil {
+		return err
+	}
+	var pub string
+	for _, m := range members {
+		if m.Name == name {
+			pub = m.PublicKey.SignPub
+			break
+		}
+	}
+	if pub == "" {
+		return fmt.Errorf("member %q not found (add them first)", name)
+	}
+	if contains(v.meta.AdminPubs, pub) {
+		return fmt.Errorf("%q is already an admin", name)
+	}
+	v.meta.AdminPubs = append(v.meta.AdminPubs, pub)
+	return v.writeMeta()
+}
+
 // AddMember admits a new member: it publishes their signed record and wraps the
 // master key to their age recipient. Requires admin rights and the master key.
 func (v *Vault) AddMember(name string, pub crypto.PublicKey) error {
@@ -311,13 +361,43 @@ func (v *Vault) RemoveMember(name string) error {
 		return fmt.Errorf("member %q not found", name)
 	}
 
+	// Rotate the master key and re-wrap for the remaining members only.
+	if err := v.rotateMaster(remaining); err != nil {
+		return err
+	}
+	// Finally, delete the removed member's access and record.
+	if err := v.dc.Remove(v.keyPath(name)); err != nil {
+		return err
+	}
+	return v.dc.Remove(v.memberPath(name))
+}
+
+// Rotate generates a fresh master key, re-encrypts every secret to it, and
+// re-wraps it for all current members. Use it proactively (e.g. suspected key
+// compromise) without changing membership. Requires admin rights.
+func (v *Vault) Rotate() error {
+	if !v.isAdmin() {
+		return fmt.Errorf("only an admin can rotate the vault key")
+	}
+	if err := v.loadMaster(); err != nil {
+		return err
+	}
+	members, err := v.ListMembers()
+	if err != nil {
+		return err
+	}
+	return v.rotateMaster(members)
+}
+
+// rotateMaster replaces the master key, re-encrypts all secrets to it, wraps it
+// for recipients, and writes the updated manifest. The caller must already hold
+// the current master (loadMaster) so existing secrets can be read.
+func (v *Vault) rotateMaster(recipients []Member) error {
 	// Load all secrets under the OLD master before rotating.
 	secrets, err := v.readAllSecrets()
 	if err != nil {
 		return err
 	}
-
-	// New master key.
 	newMaster, err := crypto.GenerateMasterKey()
 	if err != nil {
 		return err
@@ -335,20 +415,13 @@ func (v *Vault) RemoveMember(name string) error {
 		v.master = oldMaster // best-effort rollback of in-memory state
 		return fmt.Errorf("re-encrypt secret during rotation: %w", err)
 	}
-	// Re-wrap for remaining members, then refresh the manifest.
-	if err := parallelDo(remaining, func(m Member) error {
+	// Re-wrap for the recipients, then refresh the manifest.
+	if err := parallelDo(recipients, func(m Member) error {
 		return v.wrapMasterFor(m.Name, m.PublicKey.AgeRecipient)
 	}); err != nil {
 		return fmt.Errorf("re-wrap during rotation: %w", err)
 	}
-	if err := v.writeMeta(); err != nil {
-		return err
-	}
-	// Finally, delete the removed member's access and record.
-	if err := v.dc.Remove(v.keyPath(name)); err != nil {
-		return err
-	}
-	return v.dc.Remove(v.memberPath(name))
+	return v.writeMeta()
 }
 
 func contains(xs []string, x string) bool {

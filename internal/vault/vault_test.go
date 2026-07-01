@@ -3,6 +3,7 @@ package vault
 import (
 	"bytes"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/maxinielsen/secret-share/internal/crypto"
@@ -10,8 +11,10 @@ import (
 )
 
 // memStore is an in-memory implementation of Store for tests. It keys files by
-// full slash-path and synthesizes directory listings.
+// full slash-path and synthesizes directory listings. The mutex mirrors the
+// real client's independence — rotation issues concurrent writes.
 type memStore struct {
+	mu    sync.Mutex
 	files map[string][]byte
 }
 
@@ -20,11 +23,15 @@ func newMemStore() *memStore { return &memStore{files: map[string][]byte{}} }
 func (m *memStore) WriteFile(path string, data []byte) error {
 	cp := make([]byte, len(data))
 	copy(cp, data)
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.files[strings.Trim(path, "/")] = cp
 	return nil
 }
 
 func (m *memStore) ReadFile(path string) ([]byte, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	data, ok := m.files[strings.Trim(path, "/")]
 	if !ok {
 		return nil, drive.ErrNotFound
@@ -35,6 +42,8 @@ func (m *memStore) ReadFile(path string) ([]byte, error) {
 }
 
 func (m *memStore) Remove(path string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	delete(m.files, strings.Trim(path, "/"))
 	return nil
 }
@@ -45,11 +54,15 @@ func (m *memStore) Download(id string) ([]byte, error) {
 }
 
 func (m *memStore) HardDeleteByID(id string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	delete(m.files, strings.Trim(id, "/"))
 	return true, nil
 }
 
 func (m *memStore) List(dir string) ([]drive.Entry, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	dir = strings.Trim(dir, "/")
 	seen := map[string]bool{}
 	var entries []drive.Entry
@@ -254,6 +267,66 @@ func TestPurgeTombstones(t *testing.T) {
 	}
 	if _, ok := store.files["team/secrets/live.age"]; !ok {
 		t.Fatal("live secret must survive purge")
+	}
+}
+
+func TestRotateKeepsMemberAccess(t *testing.T) {
+	store := newMemStore()
+	alice := mustIdentity(t)
+	bob := mustIdentity(t)
+	av, _ := Create(store, alice, "alice", "team")
+	if err := av.AddMember("bob", bob.Public()); err != nil {
+		t.Fatal(err)
+	}
+	if err := av.SetSecret("k", "", []byte("v")); err != nil {
+		t.Fatal(err)
+	}
+	if err := av.Rotate(); err != nil {
+		t.Fatalf("rotate: %v", err)
+	}
+	if av.Meta().KeyEpoch != 2 {
+		t.Fatalf("epoch: got %d want 2", av.Meta().KeyEpoch)
+	}
+	// Both members still read under the new key.
+	for name, id := range map[string]*crypto.Identity{"alice": alice, "bob": bob} {
+		vv, _ := Open(store, id, name, "team")
+		val, _, err := vv.GetSecret("k")
+		if err != nil || string(val) != "v" {
+			t.Fatalf("%s lost access after rotate: val=%q err=%v", name, val, err)
+		}
+	}
+}
+
+func TestSecondAdminCanAddMembers(t *testing.T) {
+	store := newMemStore()
+	alice := mustIdentity(t)
+	bob := mustIdentity(t)
+	carol := mustIdentity(t)
+
+	av, _ := Create(store, alice, "alice", "team")
+	if err := av.AddMember("bob", bob.Public()); err != nil {
+		t.Fatal(err)
+	}
+	// Before promotion, bob is not an admin and cannot add members.
+	bv, _ := Open(store, bob, "bob", "team")
+	if err := bv.AddMember("carol", carol.Public()); err == nil {
+		t.Fatal("non-admin bob should not be able to add members")
+	}
+	// Alice promotes bob.
+	if err := av.AddAdmin("bob"); err != nil {
+		t.Fatalf("add admin: %v", err)
+	}
+	// Re-open so bob sees the updated manifest, then he admits carol.
+	bv2, _ := Open(store, bob, "bob", "team")
+	if err := bv2.AddMember("carol", carol.Public()); err != nil {
+		t.Fatalf("admin bob failed to add carol: %v", err)
+	}
+	if err := av.SetSecret("k", "", []byte("v")); err != nil {
+		t.Fatal(err)
+	}
+	cv, _ := Open(store, carol, "carol", "team")
+	if val, _, err := cv.GetSecret("k"); err != nil || string(val) != "v" {
+		t.Fatalf("carol cannot read: val=%q err=%v", val, err)
 	}
 }
 

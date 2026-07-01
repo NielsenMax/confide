@@ -228,6 +228,27 @@ func (v *Vault) RemoveSecret(name string) error {
 	return v.dc.Remove(v.secretPath(name))
 }
 
+// SecretValue is a name/value pair for bulk export (run/env).
+type SecretValue struct {
+	Name  string
+	Value []byte
+}
+
+// AllSecrets decrypts every secret and returns name/value pairs, sorted by
+// name. This is the O(all secrets) path — used by run/env, not by get/ls.
+func (v *Vault) AllSecrets() ([]SecretValue, error) {
+	secrets, err := v.readAllSecrets()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SecretValue, 0, len(secrets))
+	for _, s := range secrets {
+		out = append(out, SecretValue{Name: s.payload.Name, Value: s.payload.Value})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
 // PurgeTombstones permanently deletes soft-deleted (size-0) secret files. It
 // can only remove files the caller owns; files owned by other members are left
 // for their owner to purge and counted in skipped.

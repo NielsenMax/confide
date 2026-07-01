@@ -97,6 +97,31 @@ printf 'hunter2' | ./secret-share set db-password --notes prod
 ./secret-share member rm bob
 ```
 
+### More commands
+
+```sh
+# Inject secrets into a process (like `doppler run` / `chamber exec`):
+./secret-share run -- ./deploy.sh            # secrets become $DB_PASSWORD, $API_KEY, ...
+eval "$(./secret-share env)"                 # export them into your current shell
+
+# Copy a secret to the clipboard instead of printing it (avoids scrollback):
+./secret-share get db-password --copy
+
+# Admins: promote a member, list admins, rotate the key proactively:
+./secret-share admin add bob
+./secret-share admin ls
+./secret-share rotate                         # re-key without changing membership
+
+# Housekeeping:
+./secret-share purge                          # remove soft-deleted tombstones you own
+./secret-share version
+```
+
+Secret names are mapped to env var names for `run`/`env` (uppercased,
+non-alphanumerics become `_`, e.g. `db-password` → `DB_PASSWORD`). Destructive
+commands (`rm`, `member rm`, `rotate`) prompt for confirmation; pass `--yes`/`-y`
+to skip it in scripts.
+
 Members share one Drive folder. On a **Google Workspace** account use a Shared
 Drive (`--drive-id`); on a **personal Gmail** account, create the vault in your
 My Drive and share the `SecretShare` folder with your team (they need Editor

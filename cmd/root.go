@@ -63,6 +63,29 @@ func passphrasePrompt(prompt string, confirm bool) (string, error) {
 	return string(pw), nil
 }
 
+// assumeYes is set by the shared --yes flag on destructive commands.
+var assumeYes bool
+
+// confirm asks the user to approve a destructive action. With --yes it returns
+// true immediately; in a non-interactive session without --yes it refuses.
+func confirm(prompt string) error {
+	if assumeYes {
+		return nil
+	}
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return fmt.Errorf("refusing destructive action in a non-interactive session; pass --yes to proceed")
+	}
+	fmt.Fprintf(os.Stderr, "%s [y/N]: ", prompt)
+	var answer string
+	fmt.Fscanln(os.Stdin, &answer)
+	switch answer {
+	case "y", "Y", "yes", "Yes", "YES":
+		return nil
+	default:
+		return fmt.Errorf("aborted")
+	}
+}
+
 // openKeystore builds the local keystore.
 func openKeystore() (*keystore.Keystore, error) {
 	dir, err := config.Dir()

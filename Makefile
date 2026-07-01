@@ -12,7 +12,9 @@
 export
 
 PKG := github.com/maxinielsen/secret-share/internal/drive
-LDFLAGS := -X $(PKG).buildClientID=$(CLIENT_ID) -X $(PKG).buildClientSecret=$(CLIENT_SECRET)
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -X $(PKG).buildClientID=$(CLIENT_ID) -X $(PKG).buildClientSecret=$(CLIENT_SECRET) \
+	-X github.com/maxinielsen/secret-share/cmd.version=$(VERSION)
 
 .PHONY: build test vet clean
 

@@ -17,6 +17,7 @@ var (
 	setFile  string
 	setEdit  bool
 	getMeta  bool
+	getCopy  bool
 )
 
 // readSecretValue obtains the secret bytes. Precedence: --file, then --edit
@@ -139,6 +140,13 @@ var getCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "name:    %s\nnotes:   %s\nauthor:  %s\nupdated: %s\n",
 				meta.Name, meta.Notes, meta.Author, meta.UpdatedAt)
 		}
+		if getCopy {
+			if err := copyToClipboard(value); err != nil {
+				return err
+			}
+			fmt.Fprintf(os.Stderr, "Copied %q to the clipboard.\n", args[0])
+			return nil
+		}
 		os.Stdout.Write(value)
 		return nil
 	},
@@ -187,6 +195,9 @@ var rmCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		if err := confirm(fmt.Sprintf("Delete secret %q?", args[0])); err != nil {
+			return err
+		}
 		if err := v.RemoveSecret(args[0]); err != nil {
 			return err
 		}
@@ -200,5 +211,7 @@ func init() {
 	setCmd.Flags().StringVar(&setFile, "file", "", "read value from a file ('-' for stdin)")
 	setCmd.Flags().BoolVarP(&setEdit, "edit", "e", false, "compose a multi-line value in $EDITOR")
 	getCmd.Flags().BoolVar(&getMeta, "meta", false, "also print metadata to stderr")
+	getCmd.Flags().BoolVar(&getCopy, "copy", false, "copy to clipboard instead of printing")
+	rmCmd.Flags().BoolVarP(&assumeYes, "yes", "y", false, "skip confirmation")
 	rootCmd.AddCommand(setCmd, getCmd, lsCmd, rmCmd)
 }

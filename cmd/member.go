@@ -75,6 +75,9 @@ var memberRemoveCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		if err := confirm(fmt.Sprintf("Remove %q? This rotates the key and re-encrypts every secret.", args[0])); err != nil {
+			return err
+		}
 		fmt.Printf("Rotating master key and re-encrypting all secrets...\n")
 		if err := v.RemoveMember(args[0]); err != nil {
 			return err
@@ -87,6 +90,7 @@ var memberRemoveCmd = &cobra.Command{
 }
 
 func init() {
+	memberRemoveCmd.Flags().BoolVarP(&assumeYes, "yes", "y", false, "skip confirmation")
 	memberCmd.AddCommand(memberAddCmd, memberListCmd, memberRemoveCmd)
 	rootCmd.AddCommand(memberCmd)
 }
