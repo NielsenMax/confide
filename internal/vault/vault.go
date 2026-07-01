@@ -50,10 +50,9 @@ type Member struct {
 	AddedAt   string           `json:"added_at"`
 }
 
-// SecretMeta is the non-value metadata of a secret. It lives inside the
-// ciphertext, so names never appear in the clear on Drive.
+// SecretMeta is the non-value metadata of a secret. Name is also the filename
+// (not encrypted); notes/author/timestamps live inside the ciphertext.
 type SecretMeta struct {
-	ID        string `json:"-"`
 	Name      string `json:"name"`
 	Notes     string `json:"notes,omitempty"`
 	Author    string `json:"author"`
@@ -69,8 +68,10 @@ type secretPayload struct {
 
 // secretFile is the stored, signed container for one secret. The signature
 // covers the ciphertext, authenticating the author without needing decryption.
+// Name is stored in the clear (it is also the filename); the value stays inside
+// the ciphertext.
 type secretFile struct {
-	ID         string `json:"id"`
+	Name       string `json:"name"`
 	Ciphertext []byte `json:"ciphertext"`
 	Author     string `json:"author"`
 	AuthorPub  string `json:"author_pub"`
@@ -325,7 +326,7 @@ func (v *Vault) RemoveMember(name string) error {
 	// Re-encrypt every secret to the new master (concurrent writes to distinct
 	// files). v.master/v.meta are set above and only read from here on.
 	if err := parallelDo(secrets, func(s loadedSecret) error {
-		return v.writeSecretFile(s.file.ID, s.payload)
+		return v.writeSecretFile(s.payload.Name, s.payload)
 	}); err != nil {
 		v.master = oldMaster // best-effort rollback of in-memory state
 		return fmt.Errorf("re-encrypt secret during rotation: %w", err)

@@ -23,11 +23,14 @@ SecretShare/<vault>/
   meta.json          # signed manifest: master PUBLIC key, admins, key epoch
   members/<name>.json # signed public-key record for each member
   keys/<name>.age     # master private key, wrapped to that member
-  secrets/<uuid>.age  # AEAD ciphertext; the secret's name/notes live INSIDE it
+  secrets/<name>.age  # AEAD ciphertext of the value + notes; named by the secret
 ```
 
-Secret names are encrypted too — filenames are random UUIDs, so Drive leaks
-nothing about what you store.
+Secret **names are stored in the clear** (they are the filenames), so listing is
+a single directory read and fetching one secret touches exactly one file. The
+secret **value and notes stay encrypted**. This means anyone with Drive access to
+the folder can see the *names* of your secrets (e.g. `prod-db-password`) but not
+their contents — pick names that aren't themselves sensitive.
 
 ## One-time setup: Google OAuth client (done once, by you)
 

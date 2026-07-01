@@ -156,14 +156,18 @@ var lsCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		metas, err := v.ListSecrets()
+		infos, err := v.ListSecrets()
 		if err != nil {
 			return err
 		}
-		for _, m := range metas {
-			fmt.Printf("  %-24s (by %s, updated %s)\n", m.Name, m.Author, m.UpdatedAt)
+		for _, s := range infos {
+			if s.Modified != "" {
+				fmt.Printf("  %-24s (updated %s)\n", s.Name, s.Modified)
+			} else {
+				fmt.Printf("  %s\n", s.Name)
+			}
 		}
-		if len(metas) == 0 {
+		if len(infos) == 0 {
 			fmt.Println("No secrets yet. Add one with `secret-share set <name>`.")
 		}
 		return nil

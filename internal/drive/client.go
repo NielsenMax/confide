@@ -211,9 +211,10 @@ func (c *Client) Download(id string) ([]byte, error) {
 
 // Entry describes a child of a folder.
 type Entry struct {
-	Name  string
-	ID    string
-	IsDir bool
+	Name     string
+	ID       string
+	IsDir    bool
+	Modified string // RFC3339 modifiedTime, when available
 }
 
 // List returns the entries of the folder at dir. A missing folder yields nil.
@@ -238,7 +239,12 @@ func (c *Client) List(dir string) ([]Entry, error) {
 			return nil, fmt.Errorf("list %q: %w", dir, err)
 		}
 		for _, f := range res.Files {
-			entries = append(entries, Entry{Name: f.Name, ID: f.Id, IsDir: f.MimeType == folderMIME})
+			entries = append(entries, Entry{
+				Name:     f.Name,
+				ID:       f.Id,
+				IsDir:    f.MimeType == folderMIME,
+				Modified: f.ModifiedTime,
+			})
 		}
 		if res.NextPageToken == "" {
 			break

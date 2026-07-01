@@ -209,7 +209,8 @@ func TestTamperedSecretRejected(t *testing.T) {
 			store.files[path] = data
 		}
 	}
-	if _, err := av.ListSecrets(); err == nil {
-		t.Fatal("expected tampered secret to be rejected")
+	// Listing is name-only and stays fast, but reading must reject tampering.
+	if _, _, err := av.GetSecret("s"); err == nil {
+		t.Fatal("expected tampered secret to be rejected on read")
 	}
 }

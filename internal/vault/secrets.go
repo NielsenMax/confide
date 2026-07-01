@@ -3,10 +3,11 @@ package vault
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
-	"github.com/google/uuid"
 	"github.com/maxinielsen/secret-share/internal/crypto"
 	"github.com/maxinielsen/secret-share/internal/drive"
 )
@@ -15,6 +16,21 @@ import (
 type loadedSecret struct {
 	file    secretFile
 	payload secretPayload
+}
+
+// validateSecretName rejects names that can't be used as a Drive filename. The
+// name is stored in the clear (as the filename), so no characters are hidden.
+func validateSecretName(name string) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("secret name must not be empty")
+	}
+	if strings.ContainsAny(name, "/\\") {
+		return fmt.Errorf("secret name %q must not contain slashes", name)
+	}
+	if strings.HasPrefix(name, ".") {
+		return fmt.Errorf("secret name %q must not start with a dot", name)
+	}
+	return nil
 }
 
 // memberSignPubs returns the set of signing pubkeys of current members, used to
@@ -32,8 +48,8 @@ func (v *Vault) memberSignPubs() (map[string]string, error) {
 }
 
 // writeSecretFile encrypts payload to the current master and writes a signed
-// container under the given id.
-func (v *Vault) writeSecretFile(id string, payload secretPayload) error {
+// container. The file is named after the secret (names are not encrypted).
+func (v *Vault) writeSecretFile(name string, payload secretPayload) error {
 	if v.master == nil {
 		return fmt.Errorf("master key not loaded")
 	}
@@ -46,7 +62,7 @@ func (v *Vault) writeSecretFile(id string, payload secretPayload) error {
 		return err
 	}
 	sf := secretFile{
-		ID:         id,
+		Name:       name,
 		Ciphertext: ciphertext,
 		Author:     v.selfName,
 		AuthorPub:  v.self.Public().SignPub,
@@ -56,12 +72,66 @@ func (v *Vault) writeSecretFile(id string, payload secretPayload) error {
 	if err != nil {
 		return err
 	}
-	return v.dc.WriteFile(v.secretPath(id), data)
+	return v.dc.WriteFile(v.secretPath(name), data)
 }
 
-// readAllSecrets loads, verifies and decrypts every secret in the vault.
-// Secrets are downloaded concurrently by ID; verification/decryption then run
-// on each in parallel.
+// verifyAndDecrypt parses a stored container, checks the author signature and
+// membership, decrypts the payload, and confirms the name matches the file it
+// came from (defending against a file being swapped under a different name).
+func verifyAndDecrypt(name string, data []byte, master *crypto.MasterKey, memberPubs map[string]string) (loadedSecret, error) {
+	var sf secretFile
+	if err := json.Unmarshal(data, &sf); err != nil {
+		return loadedSecret{}, fmt.Errorf("parse secret %q: %w", name, err)
+	}
+	sig, err := base64.StdEncoding.DecodeString(sf.Sig)
+	if err != nil {
+		return loadedSecret{}, fmt.Errorf("secret %q: bad signature encoding: %w", name, err)
+	}
+	if err := crypto.Verify(sf.AuthorPub, sf.Ciphertext, sig); err != nil {
+		return loadedSecret{}, fmt.Errorf("secret %q: %w", name, err)
+	}
+	if _, ok := memberPubs[sf.AuthorPub]; !ok {
+		return loadedSecret{}, fmt.Errorf("secret %q authored by a non-member key; refusing to trust", name)
+	}
+	plain, err := crypto.DecryptSecret(master, sf.Ciphertext)
+	if err != nil {
+		return loadedSecret{}, fmt.Errorf("decrypt secret %q: %w", name, err)
+	}
+	var p secretPayload
+	if err := json.Unmarshal(plain, &p); err != nil {
+		return loadedSecret{}, fmt.Errorf("parse secret payload %q: %w", name, err)
+	}
+	if p.Name != name {
+		return loadedSecret{}, fmt.Errorf("secret %q: name inside ciphertext is %q (tampering?)", name, p.Name)
+	}
+	return loadedSecret{file: sf, payload: p}, nil
+}
+
+// getByName reads, verifies and decrypts a single secret by name. Cost is one
+// member listing plus one download — independent of how many secrets exist.
+func (v *Vault) getByName(name string) (*loadedSecret, error) {
+	if err := v.loadMaster(); err != nil {
+		return nil, err
+	}
+	data, err := v.dc.ReadFile(v.secretPath(name))
+	if errors.Is(err, drive.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	memberPubs, err := v.memberSignPubs()
+	if err != nil {
+		return nil, err
+	}
+	ls, err := verifyAndDecrypt(name, data, v.master, memberPubs)
+	if err != nil {
+		return nil, err
+	}
+	return &ls, nil
+}
+
+// readAllSecrets loads, verifies and decrypts every secret. Used by rotation.
 func (v *Vault) readAllSecrets() ([]loadedSecret, error) {
 	if err := v.loadMaster(); err != nil {
 		return nil, err
@@ -75,82 +145,46 @@ func (v *Vault) readAllSecrets() ([]loadedSecret, error) {
 		return nil, err
 	}
 	return parallelFetch(v.dc, ageFiles(entries), func(e drive.Entry, data []byte) (loadedSecret, error) {
-		var sf secretFile
-		if err := json.Unmarshal(data, &sf); err != nil {
-			return loadedSecret{}, fmt.Errorf("parse secret %q: %w", e.Name, err)
-		}
-		sig, err := base64.StdEncoding.DecodeString(sf.Sig)
-		if err != nil {
-			return loadedSecret{}, fmt.Errorf("secret %q: bad signature encoding: %w", e.Name, err)
-		}
-		if err := crypto.Verify(sf.AuthorPub, sf.Ciphertext, sig); err != nil {
-			return loadedSecret{}, fmt.Errorf("secret %q: %w", e.Name, err)
-		}
-		if _, ok := memberPubs[sf.AuthorPub]; !ok {
-			return loadedSecret{}, fmt.Errorf("secret %q authored by a non-member key; refusing to trust", e.Name)
-		}
-		plain, err := crypto.DecryptSecret(v.master, sf.Ciphertext)
-		if err != nil {
-			return loadedSecret{}, fmt.Errorf("decrypt secret %q: %w", e.Name, err)
-		}
-		var p secretPayload
-		if err := json.Unmarshal(plain, &p); err != nil {
-			return loadedSecret{}, fmt.Errorf("parse secret payload %q: %w", e.Name, err)
-		}
-		p.ID = sf.ID
-		return loadedSecret{file: sf, payload: p}, nil
+		return verifyAndDecrypt(secretName(e.Name), data, v.master, memberPubs)
 	})
 }
 
-// findByName returns the loaded secret whose name matches (case-sensitive).
-func (v *Vault) findByName(name string) (*loadedSecret, error) {
-	secrets, err := v.readAllSecrets()
-	if err != nil {
-		return nil, err
-	}
-	for i := range secrets {
-		if secrets[i].payload.Name == name {
-			return &secrets[i], nil
-		}
-	}
-	return nil, nil
+// secretName maps a stored filename back to the secret name.
+func secretName(filename string) string {
+	return strings.TrimSuffix(filename, ".age")
 }
 
 // SetSecret creates or updates the secret called name.
 func (v *Vault) SetSecret(name, notes string, value []byte) error {
+	if err := validateSecretName(name); err != nil {
+		return err
+	}
 	if err := v.loadMaster(); err != nil {
 		return err
 	}
-	existing, err := v.findByName(name)
-	if err != nil {
-		return err
-	}
 	now := nowStr()
-	var payload secretPayload
-	if existing != nil {
-		payload = existing.payload
-		payload.Notes = notes
-		payload.Value = value
-		payload.Author = v.selfName
-		payload.UpdatedAt = now
-		return v.writeSecretFile(existing.file.ID, payload)
+	createdAt := now
+	if existing, err := v.getByName(name); err != nil {
+		return err
+	} else if existing != nil {
+		createdAt = existing.payload.CreatedAt // preserve original creation time
 	}
-	payload = secretPayload{
+	payload := secretPayload{
 		SecretMeta: SecretMeta{
 			Name:      name,
 			Notes:     notes,
 			Author:    v.selfName,
-			CreatedAt: now,
+			CreatedAt: createdAt,
 			UpdatedAt: now,
 		},
 		Value: value,
 	}
-	return v.writeSecretFile(uuid.NewString(), payload)
+	return v.writeSecretFile(name, payload)
 }
 
 // GetSecret returns the value and metadata of the named secret.
 func (v *Vault) GetSecret(name string) ([]byte, *SecretMeta, error) {
-	s, err := v.findByName(name)
+	s, err := v.getByName(name)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -161,30 +195,34 @@ func (v *Vault) GetSecret(name string) ([]byte, *SecretMeta, error) {
 	return s.payload.Value, &meta, nil
 }
 
-// ListSecrets returns metadata for all secrets, sorted by name.
-func (v *Vault) ListSecrets() ([]SecretMeta, error) {
-	secrets, err := v.readAllSecrets()
+// SecretInfo is the lightweight listing of a secret: its (cleartext) name and
+// Drive modification time. Listing needs no downloads or decryption.
+type SecretInfo struct {
+	Name     string
+	Modified string
+}
+
+// ListSecrets lists secret names without downloading or decrypting anything.
+func (v *Vault) ListSecrets() ([]SecretInfo, error) {
+	entries, err := v.dc.List(v.secretsDir())
 	if err != nil {
 		return nil, err
 	}
-	metas := make([]SecretMeta, 0, len(secrets))
-	for _, s := range secrets {
-		metas = append(metas, s.payload.SecretMeta)
+	var infos []SecretInfo
+	for _, e := range ageFiles(entries) {
+		infos = append(infos, SecretInfo{Name: secretName(e.Name), Modified: e.Modified})
 	}
-	sort.Slice(metas, func(i, j int) bool { return metas[i].Name < metas[j].Name })
-	return metas, nil
+	sort.Slice(infos, func(i, j int) bool { return infos[i].Name < infos[j].Name })
+	return infos, nil
 }
 
-// RemoveSecret deletes the named secret.
+// RemoveSecret deletes the named secret by path — a single call. Removing a
+// name that doesn't exist is a no-op.
 func (v *Vault) RemoveSecret(name string) error {
-	s, err := v.findByName(name)
-	if err != nil {
+	if err := validateSecretName(name); err != nil {
 		return err
 	}
-	if s == nil {
-		return fmt.Errorf("secret %q not found", name)
-	}
-	return v.dc.Remove(v.secretPath(s.file.ID))
+	return v.dc.Remove(v.secretPath(name))
 }
 
 // Meta exposes the (verified) manifest.
