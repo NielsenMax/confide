@@ -196,9 +196,14 @@ func (c *Client) ReadFile(path string) ([]byte, error) {
 	if id == "" {
 		return nil, ErrNotFound
 	}
+	return c.Download(id)
+}
+
+// Download fetches a file's contents by its Drive file ID.
+func (c *Client) Download(id string) ([]byte, error) {
 	resp, err := c.svc.Files.Get(id).SupportsAllDrives(true).Download()
 	if err != nil {
-		return nil, fmt.Errorf("download %q: %w", path, err)
+		return nil, fmt.Errorf("download %s: %w", id, err)
 	}
 	defer resp.Body.Close()
 	return io.ReadAll(resp.Body)

@@ -17,6 +17,9 @@ import (
 // implements it; tests supply an in-memory version.
 type Store interface {
 	ReadFile(path string) ([]byte, error)
+	// Download fetches a file by the opaque ID returned in an Entry, avoiding a
+	// second name lookup when the file was just listed.
+	Download(id string) ([]byte, error)
 	WriteFile(path string, data []byte) error
 	List(dir string) ([]drive.Entry, error)
 	Remove(path string) error
@@ -233,32 +236,24 @@ func (v *Vault) loadMaster() error {
 	return nil
 }
 
-// ListMembers returns all verified member records.
+// ListMembers returns all verified member records. Records are downloaded
+// concurrently by ID.
 func (v *Vault) ListMembers() ([]Member, error) {
 	entries, err := v.dc.List(v.membersDir())
 	if err != nil {
 		return nil, err
 	}
-	var members []Member
-	for _, e := range entries {
-		if e.IsDir {
-			continue
-		}
-		data, err := v.dc.ReadFile(v.membersDir() + "/" + e.Name)
-		if err != nil {
-			return nil, err
-		}
+	return parallelFetch(v.dc, files(entries), func(e drive.Entry, data []byte) (Member, error) {
 		var m Member
 		signerPub, _, err := openEnvelope(data, &m)
 		if err != nil {
-			return nil, fmt.Errorf("member %q: %w", e.Name, err)
+			return m, fmt.Errorf("member %q: %w", e.Name, err)
 		}
 		if !contains(v.meta.AdminPubs, signerPub) {
-			return nil, fmt.Errorf("member record %q not signed by an admin", e.Name)
+			return m, fmt.Errorf("member record %q not signed by an admin", e.Name)
 		}
-		members = append(members, m)
-	}
-	return members, nil
+		return m, nil
+	})
 }
 
 // AddMember admits a new member: it publishes their signed record and wraps the
@@ -327,18 +322,19 @@ func (v *Vault) RemoveMember(name string) error {
 	v.meta.MasterRecipient = newMaster.Recipient()
 	v.meta.KeyEpoch++
 
-	// Re-encrypt every secret to the new master.
-	for _, s := range secrets {
-		if err := v.writeSecretFile(s.file.ID, s.payload); err != nil {
-			v.master = oldMaster // best-effort rollback of in-memory state
-			return fmt.Errorf("re-encrypt secret during rotation: %w", err)
-		}
+	// Re-encrypt every secret to the new master (concurrent writes to distinct
+	// files). v.master/v.meta are set above and only read from here on.
+	if err := parallelDo(secrets, func(s loadedSecret) error {
+		return v.writeSecretFile(s.file.ID, s.payload)
+	}); err != nil {
+		v.master = oldMaster // best-effort rollback of in-memory state
+		return fmt.Errorf("re-encrypt secret during rotation: %w", err)
 	}
-	// Re-wrap for remaining members and refresh the manifest.
-	for _, m := range remaining {
-		if err := v.wrapMasterFor(m.Name, m.PublicKey.AgeRecipient); err != nil {
-			return fmt.Errorf("re-wrap for %q: %w", m.Name, err)
-		}
+	// Re-wrap for remaining members, then refresh the manifest.
+	if err := parallelDo(remaining, func(m Member) error {
+		return v.wrapMasterFor(m.Name, m.PublicKey.AgeRecipient)
+	}); err != nil {
+		return fmt.Errorf("re-wrap during rotation: %w", err)
 	}
 	if err := v.writeMeta(); err != nil {
 		return err

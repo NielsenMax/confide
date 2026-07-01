@@ -9,6 +9,7 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/zalando/go-keyring v0.2.5
 	golang.org/x/oauth2 v0.23.0
+	golang.org/x/sync v0.8.0
 	golang.org/x/term v0.24.0
 	google.golang.org/api v0.197.0
 )

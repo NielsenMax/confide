@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/maxinielsen/secret-share/internal/crypto"
+	"github.com/maxinielsen/secret-share/internal/drive"
 )
 
 // loadedSecret bundles a stored secret's container with its decrypted payload.
@@ -60,6 +60,8 @@ func (v *Vault) writeSecretFile(id string, payload secretPayload) error {
 }
 
 // readAllSecrets loads, verifies and decrypts every secret in the vault.
+// Secrets are downloaded concurrently by ID; verification/decryption then run
+// on each in parallel.
 func (v *Vault) readAllSecrets() ([]loadedSecret, error) {
 	if err := v.loadMaster(); err != nil {
 		return nil, err
@@ -72,41 +74,32 @@ func (v *Vault) readAllSecrets() ([]loadedSecret, error) {
 	if err != nil {
 		return nil, err
 	}
-	var out []loadedSecret
-	for _, e := range entries {
-		if e.IsDir || !strings.HasSuffix(e.Name, ".age") {
-			continue
-		}
-		data, err := v.dc.ReadFile(v.secretsDir() + "/" + e.Name)
-		if err != nil {
-			return nil, err
-		}
+	return parallelFetch(v.dc, ageFiles(entries), func(e drive.Entry, data []byte) (loadedSecret, error) {
 		var sf secretFile
 		if err := json.Unmarshal(data, &sf); err != nil {
-			return nil, fmt.Errorf("parse secret %q: %w", e.Name, err)
+			return loadedSecret{}, fmt.Errorf("parse secret %q: %w", e.Name, err)
 		}
 		sig, err := base64.StdEncoding.DecodeString(sf.Sig)
 		if err != nil {
-			return nil, fmt.Errorf("secret %q: bad signature encoding: %w", e.Name, err)
+			return loadedSecret{}, fmt.Errorf("secret %q: bad signature encoding: %w", e.Name, err)
 		}
 		if err := crypto.Verify(sf.AuthorPub, sf.Ciphertext, sig); err != nil {
-			return nil, fmt.Errorf("secret %q: %w", e.Name, err)
+			return loadedSecret{}, fmt.Errorf("secret %q: %w", e.Name, err)
 		}
 		if _, ok := memberPubs[sf.AuthorPub]; !ok {
-			return nil, fmt.Errorf("secret %q authored by a non-member key; refusing to trust", e.Name)
+			return loadedSecret{}, fmt.Errorf("secret %q authored by a non-member key; refusing to trust", e.Name)
 		}
 		plain, err := crypto.DecryptSecret(v.master, sf.Ciphertext)
 		if err != nil {
-			return nil, fmt.Errorf("decrypt secret %q: %w", e.Name, err)
+			return loadedSecret{}, fmt.Errorf("decrypt secret %q: %w", e.Name, err)
 		}
 		var p secretPayload
 		if err := json.Unmarshal(plain, &p); err != nil {
-			return nil, fmt.Errorf("parse secret payload %q: %w", e.Name, err)
+			return loadedSecret{}, fmt.Errorf("parse secret payload %q: %w", e.Name, err)
 		}
 		p.ID = sf.ID
-		out = append(out, loadedSecret{file: sf, payload: p})
-	}
-	return out, nil
+		return loadedSecret{file: sf, payload: p}, nil
+	})
 }
 
 // findByName returns the loaded secret whose name matches (case-sensitive).

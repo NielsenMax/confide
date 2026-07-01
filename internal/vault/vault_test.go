@@ -39,6 +39,11 @@ func (m *memStore) Remove(path string) error {
 	return nil
 }
 
+// Download uses the full path as the entry ID (see List below).
+func (m *memStore) Download(id string) ([]byte, error) {
+	return m.ReadFile(id)
+}
+
 func (m *memStore) List(dir string) ([]drive.Entry, error) {
 	dir = strings.Trim(dir, "/")
 	seen := map[string]bool{}
@@ -62,7 +67,11 @@ func (m *memStore) List(dir string) ([]drive.Entry, error) {
 			continue
 		}
 		seen[name] = true
-		entries = append(entries, drive.Entry{Name: name, IsDir: isDir})
+		id := name
+		if dir != "" {
+			id = dir + "/" + name
+		}
+		entries = append(entries, drive.Entry{Name: name, ID: id, IsDir: isDir})
 	}
 	return entries, nil
 }
