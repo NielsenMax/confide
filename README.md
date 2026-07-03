@@ -89,6 +89,64 @@ supply it via the env vars / `credentials.json` above (or their own `make`
 build). That avoids Google's verification process *and* the shared Drive API
 quota that a single client ID would impose across all users.
 
+## Installing (for teammates)
+
+Teammates **do not** build from source and **do not** use `go install` —
+`go install` compiles the public source on their machine, which has no OAuth
+credentials embedded, so it would produce a binary that can't log in.
+
+The binaries are built by CI (`.github/workflows/release.yml`) with the OAuth
+client credentials injected from repository secrets at build time — the
+credentials live only in GitHub Actions secrets, never in the source tree.
+
+**One-liner (macOS / Linux):**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/NielsenMax/confide/main/install.sh | sh
+confide login   # authorize your Google account (must be a test user)
+```
+
+The script detects your OS/arch, downloads the matching binary from the latest
+release, and puts it on your PATH. Pin a version with `CONFIDE_VERSION=v0.1.0`,
+or change the target dir with `CONFIDE_INSTALL_DIR=...`.
+
+**Manual:** grab the asset for your OS/arch from the
+[Releases](https://github.com/NielsenMax/confide/releases) page
+(`confide_darwin_arm64`, `confide_linux_amd64`, `confide_windows_amd64.exe`, …),
+then:
+
+```sh
+chmod +x confide_darwin_arm64
+./confide_darwin_arm64 install --add-path   # copies to ~/.local/bin, updates shell rc
+```
+
+Only Google accounts added as **test users** on the OAuth consent screen can
+complete `confide login`; the embedded client identity alone grants no access to
+the team's vault (that's gated by Drive folder sharing + encryption).
+
+### Staying up to date
+
+Confide checks for a newer release at most once a day and prints a one-line
+notice when one exists. To upgrade:
+
+```sh
+confide update            # downloads the latest release, verifies its checksum,
+                          # and replaces the running binary in place
+```
+
+The notice is silenced for non-interactive shells and can be disabled with
+`CONFIDE_NO_UPDATE_CHECK=1`. `confide update` upgrades the CLI only — it never
+touches your vault or secrets.
+
+### Cutting a release (maintainer)
+
+One-time: add `CLIENT_ID` and `CLIENT_SECRET` under **Settings → Secrets and
+variables → Actions**. Then tag:
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0   # CI builds all platforms + publishes
+```
+
 ## Usage
 
 ```sh

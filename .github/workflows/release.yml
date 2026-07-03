@@ -1,0 +1,99 @@
+name: release
+
+# Build signed-off release binaries with the OAuth client credentials baked in,
+# pulled from repository secrets at build time. The credentials never appear in
+# the source tree — only in GitHub Actions secrets and (necessarily) inside the
+# compiled binary, where a Desktop-app secret is non-confidential by design.
+#
+# Trigger by pushing a version tag:
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   CLIENT_ID      the Google OAuth Desktop-app client ID
+#   CLIENT_SECRET  its client secret
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { goos: darwin,  goarch: amd64 }
+          - { goos: darwin,  goarch: arm64 }
+          - { goos: linux,   goarch: amd64 }
+          - { goos: linux,   goarch: arm64 }
+          - { goos: windows, goarch: amd64 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        env:
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          set -euo pipefail
+          if [ -z "${CLIENT_ID}" ]; then
+            echo "::error::CLIENT_ID secret is not set — add it under repo Settings > Secrets" >&2
+            exit 1
+          fi
+          PKG=github.com/NielsenMax/confide/internal/drive
+          # Stable, version-less asset names so the releases/latest/download/<name>
+          # redirect works for install.sh and `confide update`. The embedded
+          # -X ...cmd.version still records the tag inside the binary.
+          OUT="confide_${GOOS}_${GOARCH}"
+          [ "${GOOS}" = windows ] && OUT="${OUT}.exe"
+          go build -trimpath -ldflags "\
+            -s -w \
+            -X ${PKG}.buildClientID=${CLIENT_ID} \
+            -X ${PKG}.buildClientSecret=${CLIENT_SECRET} \
+            -X github.com/NielsenMax/confide/cmd.version=${GITHUB_REF_NAME}" \
+            -o "${OUT}" .
+          echo "ASSET=${OUT}" >> "${GITHUB_ENV}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ASSET }}
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum confide_* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes
